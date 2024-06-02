@@ -20,14 +20,20 @@ impl JxlFile {
             else if input_data.starts_with(&[0xff, 0x0a]) {
                 boxes.push(JxlBox {
                     box_type: JxlBoxType::JXL_RAW,
-                    length: input_data.len()-2,
-                    data: input_data.to_owned().drain(2..).collect()
+                    length: input_data.len() as u64,
+                    data: input_data.to_owned()
                 });
                 break;
             } else {
-                let box_len = u32::from_be_bytes(input_data.as_slice()[..4].try_into().unwrap()) as usize;
+                let mut box_len: u64 = u32::from_be_bytes(input_data.as_slice()[..4].try_into().unwrap()) as u64;
                 let box_type: [u8; 4] = input_data.as_slice()[4..8].try_into().unwrap();
-                let box_data = input_data.drain(..box_len).skip(8).collect::<Vec<u8>>();
+                let box_data: Vec<u8>;
+                if box_len == 1 {
+                    box_len = u64::from_be_bytes(input_data.as_slice()[8..16].try_into().unwrap());
+                    box_data = input_data.drain(..(box_len as usize)).skip(16).collect::<Vec<u8>>();
+                } else {
+                    box_data = input_data.drain(..(box_len as usize)).skip(8).collect::<Vec<u8>>();
+                }
                 boxes.push(JxlBox {
                     box_type: match &box_type {
                         b"JXL " => JxlBoxType::JXL_SIGNATURE,
@@ -48,7 +54,7 @@ impl JxlFile {
                 });
             } 
         };
-        
+
         Ok(Self { boxes: boxes })
     }
 
@@ -80,5 +86,5 @@ pub enum JxlBoxType {
 pub struct JxlBox {
     box_type: JxlBoxType,
     data: Vec<u8>,
-    length: usize,
+    length: u64,
 }

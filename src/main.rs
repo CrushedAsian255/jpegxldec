@@ -1,5 +1,6 @@
 use std::env;
 mod jxl_file;
+mod bit_reader;
 
 #[allow(unused_mut,unused_variables)]
 fn main() {
