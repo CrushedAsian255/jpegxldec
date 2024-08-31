@@ -4,7 +4,7 @@ use crate::bit_reader::QuadDistributions::*;
 use crate::jxl_file::JxlFile;
 use crate::pixel_array::PixelArray;
 
-#[derive(Debug)]
+#[derive(Debug,PartialEq)]
 struct JxlImageSize {
     width: u32,
     height: u32
@@ -201,16 +201,38 @@ impl JxlBitDepth {
 }
 
 #[derive(Debug)]
-struct JxlExtraChannelInfo {}
+struct JxlExtraChannel {}
 
 #[derive(Debug)]
-struct JxlColourEncodingInfo {}
+struct JxlColourEncoding {}
+impl JxlColourEncoding {
+    pub fn read(bitstream: &mut BitStream) -> Option<Self> {
+        let all_default = bitstream.read_bool()?;
+        if all_default {
+            return Some(Self{});
+        } else {
+            todo!("Not implemented - colour management is hard");
+        }
+    }
+}
 
 #[derive(Debug)]
-struct JxlToneMappingInfo {}
+struct JxlToneMapping {}
 
 #[derive(Debug)]
-struct JxlExtensionInfo {}
+struct JxlExtensions {
+    extensions: Vec<u64>
+}
+impl JxlExtensions {
+    pub fn read(bitstream: &mut BitStream) -> Option<Self> {
+        let extensions_bitmap = bitstream.read_var_u64()?;
+        if extensions_bitmap == 0 {
+            Some(Self{extensions: Vec::new()})
+        } else {
+            todo!("Not implemented {:#}",extensions_bitmap)
+        }
+    }
+}
 
 #[derive(Debug)]
 struct JxlImageMetadata {
@@ -220,16 +242,18 @@ struct JxlImageMetadata {
     animation_info: Option<JxlAnimationInfo>,
     bit_depth: JxlBitDepth,
     modular_16bit: bool,
-    // extra_channels: Vec<JxlExtraChannelInfo>,
-    // xyb_encoded: bool,
-    // color_encoding: JxlColourEncodingInfo,
-    // tone_mapping: JxlToneMappingInfo,
+    extra_channels: Vec<JxlExtraChannel>,
+    xyb_encoded: bool,
+    colour_encoding: JxlColourEncoding,
+    tone_mapping: Option<JxlToneMapping>,
+    extensions: Option<JxlExtensions>
 }
 
 impl JxlImageMetadata {
     pub fn read(bitstream: &mut BitStream) -> Option<Self> {
         let all_default = bitstream.read_bool()?;
         let extra_fields = if all_default { false } else {bitstream.read_bool()?};
+        println!("Using all default options: {}\nExtra fields present: {}",all_default,extra_fields);
         let orientation = if extra_fields { JxlOrientation::from(bitstream.read_u8(3)?) } else { JxlOrientation::Normal };
         let intrinsic_size = if !extra_fields { None } else {
             if bitstream.read_bool()? {
@@ -248,17 +272,61 @@ impl JxlImageMetadata {
         };
         let bit_depth = JxlBitDepth::read(bitstream)?;
         let modular_16bit = bitstream.read_bool()?;
+        let extra_channel_count = bitstream.read_quad_u32(
+            RawValue(0),
+            RawValue(1),
+            BitCountWithOffset(4, 2),
+            BitCountWithOffset(12, 1)
+        )?;
+        let extra_channels: Vec<JxlExtraChannel> = Vec::with_capacity(extra_channel_count as usize);
+        for _ in 0..extra_channel_count {
+            todo!("Read extra channels");
+        }
+        let xyb_encoded = bitstream.read_bool()?;
+        let colour_encoding = JxlColourEncoding::read(bitstream)?;
+        let tone_mapping = if extra_fields { todo!("Not implemented") } else { None };
+        let extensions = if all_default {
+            None
+        } else {
+            let extensions_ = JxlExtensions::read(bitstream)?;
+            if extensions_.extensions.len() == 0 { None } else { Some(extensions_) }
+        };
+        let default_m = bitstream.read_bool()?;
+        if default_m {
+            if xyb_encoded {
+                todo!("Custom XYB Matrix")
+            }
+            let cw_mask = bitstream.read_u8(3)?;
+            if cw_mask != 0 {
+                todo!("CW Mask {:#}",cw_mask);
+            }
+        }
         Some(JxlImageMetadata {
             orientation,
             intrinsic_size,
             preview_size,
             animation_info,
             bit_depth,
-            modular_16bit
+            modular_16bit,
+            extra_channels,
+            xyb_encoded,
+            colour_encoding,
+            tone_mapping,
+            extensions
         })
     }
 }
 
+#[derive(Debug)]
+struct JxlFrame {
+
+}
+
+impl JxlFrame {
+    pub fn read(bitstream: &mut BitStream) -> Option<Self> {
+        Some(JxlFrame{})
+    }
+}
 
 pub fn decode_jxl(input_file: JxlFile) -> Option<PixelArray<u32>> {
     let mut jxl_data = BitStream::new(&input_file.get_image_data());
@@ -267,5 +335,14 @@ pub fn decode_jxl(input_file: JxlFile) -> Option<PixelArray<u32>> {
     let image_metadata = JxlImageMetadata::read(&mut jxl_data).expect("Not enough data to read image size!");
     println!("Image dimensions: {:?}",image_size);
     println!("Image metadata: {:?}",image_metadata);
+    let preview_frame = if image_metadata.preview_size != None {
+        Some(JxlFrame::read(&mut jxl_data).unwrap())
+    } else { None };
+    let mut frames: Vec<JxlFrame> = Vec::new();
+    loop {
+        let next_frame = JxlFrame::read(&mut jxl_data).unwrap();
+        frames.push(next_frame);
+        break;
+    }
     None
 }

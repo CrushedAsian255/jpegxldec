@@ -100,6 +100,17 @@ impl BitStream {
         
         Some(out)
     }
+    pub fn read_var_u64(&mut self) -> Option<u64> {
+        match self.read_u8(2)? {
+            0 => Some(0),
+            1 => Some(self.read_u8(4)? as u64 + 1),
+            2 => Some(self.read_u8(8)? as u64 + 17),
+            3 => {
+                todo!("Not implemented: U64.3");
+            }
+            _ => unreachable!()
+        }
+    }
 }
 
 #[cfg(test)]
