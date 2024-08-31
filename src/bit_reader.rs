@@ -9,7 +9,7 @@ pub struct BitStream {
 }
 
 #[derive(Copy, Clone, Debug)]
-pub enum CapU32Distributions {
+pub enum QuadDistributions {
     RawValue(u32),
     BitCount(u8),
     BitCountWithOffset(u8, u32)
@@ -85,14 +85,14 @@ impl BitStream {
         println!("Read u64({}): {}",bits,out);
         Some(out)
     }
-    pub fn read_cap_u32(&mut self, d0: CapU32Distributions, d1: CapU32Distributions, d2: CapU32Distributions, d3: CapU32Distributions) -> Option<u32> {
+    pub fn read_quad_u32(&mut self, d0: QuadDistributions, d1: QuadDistributions, d2: QuadDistributions, d3: QuadDistributions) -> Option<u32> {
         let distribution = self.read_u8(2)?;
         let selected_distribution = [d0,d1,d2,d3][distribution as usize];
         
         let out = match selected_distribution {
-            CapU32Distributions::RawValue(n) => n,
-            CapU32Distributions::BitCount(n) => self.read_u32(n)?,
-            CapU32Distributions::BitCountWithOffset(n, o) => self.read_u32(n)?.wrapping_add(o)
+            QuadDistributions::RawValue(n) => n,
+            QuadDistributions::BitCount(n) => self.read_u32(n)?,
+            QuadDistributions::BitCountWithOffset(n, o) => self.read_u32(n)?.wrapping_add(o)
         };
 
         #[cfg(feature = "bit_read_debug_prints")]

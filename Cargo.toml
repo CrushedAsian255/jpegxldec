@@ -6,5 +6,5 @@ edition = "2021"
 [dependencies]
 
 [features]
-default = ["bit_read_debug_prints"]
+default = []
 bit_read_debug_prints = []

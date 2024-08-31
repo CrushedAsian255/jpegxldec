@@ -22,6 +22,5 @@ fn main() {
     };
     #[allow(unused_variables)]
     let jxl_file = jxl_file::JxlFile::read(file).unwrap();
-    assert_eq!(jxl_file.print_box_list(),Some(()));
     let output_pixels = jxl_decoder::decode_jxl(jxl_file);
 }

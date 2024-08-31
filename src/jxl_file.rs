@@ -5,7 +5,7 @@ use std::io::Read;
 use std::fmt::Debug;
 
 use crate::bit_reader::BitStream;
-use crate::bit_reader::CapU32Distributions;
+use crate::bit_reader::QuadDistributions;
 
 #[derive(Debug)]
 pub struct JxlFile {
