@@ -1,6 +1,9 @@
-use std::env;
 mod jxl_file;
 mod bit_reader;
+mod jxl_decoder;
+mod pixel_array;
+
+use std::env;
 
 #[allow(unused_mut,unused_variables)]
 fn main() {
@@ -19,5 +22,6 @@ fn main() {
     };
     #[allow(unused_variables)]
     let jxl_file = jxl_file::JxlFile::read(file).unwrap();
-    jxl_file.print_box_list();
+    assert_eq!(jxl_file.print_box_list(),Some(()));
+    let output_pixels = jxl_decoder::decode_jxl(jxl_file);
 }

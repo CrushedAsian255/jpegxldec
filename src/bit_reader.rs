@@ -8,15 +8,27 @@ pub struct BitStream {
     tail_len: u8
 }
 
+#[derive(Copy, Clone, Debug)]
+pub enum CapU32Distributions {
+    RawValue(u32),
+    BitCount(u8),
+    BitCountWithOffset(u8, u32)
+}
+
 impl BitStream {
-    pub fn new(data: &[u8]) -> Self { Self { data: data.to_owned(), ptr: 0, tail: data[0], tail_len: 8 } }
+    pub fn new<'a>(data: &[u8]) -> Self { Self { data: data.to_owned(), ptr: 0, tail: data[0], tail_len: 8 } }
 }
 
 impl BitStream {
     pub fn is_empty(&self) -> bool {
         self.tail_len == 0 && self.ptr == self.data.len()
     } 
-    pub fn read_bit(&mut self) -> Option<u8> {
+    pub fn pad_zero(&mut self) -> Option<()> {
+        if self.is_empty() { None }
+        else if self.tail != 0 { None }
+        else { Some(()) }
+    }
+    fn read_bit(&mut self) -> Option<u8> {
         if self.tail_len == 0 {
             if self.ptr == (self.data.len() - 1) {
                 return None;
@@ -31,35 +43,61 @@ impl BitStream {
         self.tail_len -= 1;
         return Some(out);
     }
+    pub fn read_bool(&mut self) -> Option<bool> {
+        let out = self.read_bit()?;
+        #[cfg(feature = "bit_read_debug_prints")]
+        println!("Read bool: {}",out);
+        Some(out != 0)
+    }
     pub fn read_u8(&mut self, bits: u8) -> Option<u8> {
         let mut out: u8 = 0;
         for i in 0..bits {
             out |= self.read_bit()? << i;
         }
+        #[cfg(feature = "bit_read_debug_prints")]
+        println!("Read u8({}): {}",bits,out);
         Some(out)
     }
-
     pub fn read_u16(&mut self, bits: u8) -> Option<u16> {
         let mut out: u16 = 0;
         for i in 0..bits {
             out |= (self.read_bit()? as u16) << i;
         }
+        #[cfg(feature = "bit_read_debug_prints")]
+        println!("Read u16({}): {}",bits,out);
         Some(out)
     }
-
     pub fn read_u32(&mut self, bits: u8) -> Option<u32> {
         let mut out: u32 = 0;
         for i in 0..bits {
             out |= (self.read_bit()? as u32) << i;
         }
+        #[cfg(feature = "bit_read_debug_prints")]
+        println!("Read u32({}): {}",bits,out);
         Some(out)
     }
-
     pub fn read_u64(&mut self, bits: u8) -> Option<u64> {
         let mut out: u64 = 0;
         for i in 0..bits {
             out |= (self.read_bit()? as u64) << i;
         }
+        #[cfg(feature = "bit_read_debug_prints")]
+        println!("Read u64({}): {}",bits,out);
+        Some(out)
+    }
+    pub fn read_cap_u32(&mut self, d0: CapU32Distributions, d1: CapU32Distributions, d2: CapU32Distributions, d3: CapU32Distributions) -> Option<u32> {
+        let distribution = self.read_u8(2)?;
+        let selected_distribution = [d0,d1,d2,d3][distribution as usize];
+        
+        let out = match selected_distribution {
+            CapU32Distributions::RawValue(n) => n,
+            CapU32Distributions::BitCount(n) => self.read_u32(n)?,
+            CapU32Distributions::BitCountWithOffset(n, o) => self.read_u32(n)?.wrapping_add(o)
+        };
+
+        #[cfg(feature = "bit_read_debug_prints")]
+        println!("Read U32({:?},{:?},{:?},{:?}): {}:{}",d0,d1,d2,d3,distribution,out);
+        
         Some(out)
     }
 }

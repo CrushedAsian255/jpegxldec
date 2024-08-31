@@ -1,8 +1,11 @@
-#![allow(non_camel_case_types,dead_code)]
+#![allow(non_camel_case_types,dead_code,unused_imports)]
 
 use std::io::Error as IoError;
 use std::io::Read;
 use std::fmt::Debug;
+
+use crate::bit_reader::BitStream;
+use crate::bit_reader::CapU32Distributions;
 
 #[derive(Debug)]
 pub struct JxlFile {
@@ -58,10 +61,52 @@ impl JxlFile {
         Ok(Self { boxes: boxes })
     }
 
-    pub fn print_box_list(&self) {
+    pub fn print_box_list(&self) -> Option<()> {
         for jxl_box in &self.boxes {
             println!("{:?}: {} bytes",jxl_box.box_type,jxl_box.length);
+            use JxlBoxType as E;
+            match jxl_box.box_type {
+                E::JXL_RAW => println!("Raw codestream"),
+                E::JXL_SIGNATURE => {
+                    if jxl_box.data.as_slice() == b"\x0d\x0a\x87\x0a" {
+                        println!("Valid signature");
+                    } else {
+                        panic!("Error: invalid JXL signature");
+                    }
+                },
+                E::JXL_FILE_TYPE => {
+                    if jxl_box.data.as_slice() == b"jxl \0\0\0\0jxl " {
+                        println!("Valid file type");
+                    } else {
+                        panic!("Error: invalid JXL file type");
+                    }
+                },
+                E::JXL_PARTIAL => {
+                    let box_index = u32::from_be_bytes(jxl_box.data.as_slice()[0..4].try_into().unwrap());
+                    let is_last_box: bool =  box_index & (1<<31) != 0;
+                    println!("Index: {}, is last box: {}",box_index&!(1<<31),is_last_box);
+                }
+                _ => todo!()
+            }
         }
+        Some(())
+    }
+
+    pub fn get_image_data(&self) -> Vec<u8> {
+        let mut output_vector = Vec::new();
+
+        for jxl_box in &self.boxes {
+            println!("{:?}: {} bytes",jxl_box.box_type,jxl_box.length);
+            use JxlBoxType as E;
+            match jxl_box.box_type {
+                E::JXL_RAW => {
+                    output_vector.extend(jxl_box.data.iter())
+                },
+                E::JXL_CODESTREAM | E::JXL_PARTIAL => todo!("not implemented"),
+                _ => ()
+            }
+        }
+        output_vector
     }
 }
 
@@ -86,5 +131,5 @@ pub enum JxlBoxType {
 pub struct JxlBox {
     box_type: JxlBoxType,
     data: Vec<u8>,
-    length: u64,
+    length: u64
 }
