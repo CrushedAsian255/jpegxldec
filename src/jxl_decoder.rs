@@ -1,15 +1,16 @@
+#![allow(dead_code,unused_variables)]
+
 use crate::bit_reader::BitStream;
-use crate::bit_reader::QuadDistributions;
 use crate::bit_reader::QuadDistributions::*;
 use crate::jxl_file::JxlFile;
 use crate::pixel_array::PixelArray;
+use crate::jxl_frame::JxlFrame;
 
 #[derive(Debug,PartialEq)]
 struct JxlImageSize {
     width: u32,
     height: u32
 }
-
 impl JxlImageSize {
     pub fn read(bitstream: &mut BitStream) -> Option<Self> {
         let div8 = bitstream.read_bool()?;
@@ -46,38 +47,6 @@ impl JxlImageSize {
         };
         Some(JxlImageSize { width, height })
     }
-}
-
-#[derive(Debug)]
-enum JxlOrientation {
-    Normal,
-    Rotate90,
-    Rotate180,
-    Rotate270,
-    HorizontalFlip,
-    VerticalFlip,
-    Rotate90HorizontalFlip,
-    HorizontalFlipRotate90
-}
-
-impl From<u8> for JxlOrientation {
-    fn from(value: u8) -> Self {
-        use JxlOrientation as E;
-        match value {
-            0 => E::Normal,
-            1 => E::HorizontalFlip,
-            2 => E::Rotate180,
-            3 => E::VerticalFlip,
-            4 => E::Rotate90HorizontalFlip,
-            5 => E::Rotate90,
-            6 => E::HorizontalFlipRotate90,
-            7 => E::Rotate270,
-            _ => unreachable!()
-        }
-    }
-}
-
-impl JxlImageSize {
     pub fn read_preview(bitstream: &mut BitStream) -> Option<Self> {
         let div8 = bitstream.read_bool()?;
         let height = if div8 {
@@ -125,6 +94,33 @@ impl JxlImageSize {
     }
 }
 
+#[derive(Debug)]
+enum JxlOrientation {
+    Normal,
+    Rotate90,
+    Rotate180,
+    Rotate270,
+    HorizontalFlip,
+    VerticalFlip,
+    Rotate90HorizontalFlip,
+    HorizontalFlipRotate90
+}
+impl From<u8> for JxlOrientation {
+    fn from(value: u8) -> Self {
+        use JxlOrientation as E;
+        match value {
+            0 => E::Normal,
+            1 => E::HorizontalFlip,
+            2 => E::Rotate180,
+            3 => E::VerticalFlip,
+            4 => E::Rotate90HorizontalFlip,
+            5 => E::Rotate90,
+            6 => E::HorizontalFlipRotate90,
+            7 => E::Rotate270,
+            _ => unreachable!()
+        }
+    }
+}
 
 #[derive(Debug)]
 struct JxlAnimationInfo {
@@ -133,7 +129,6 @@ struct JxlAnimationInfo {
     loop_count: u32,
     has_timecodes: bool
 }
-
 impl JxlAnimationInfo {
     pub fn read(bitstream: &mut BitStream) -> Option<Self> {
         let tps_numerator = bitstream.read_quad_u32(
@@ -174,7 +169,6 @@ enum JxlBitDepth {
         exp_bits: u8
     }
 }
-
 impl JxlBitDepth {
     pub fn read(bitstream: &mut BitStream) -> Option<Self> {
         match bitstream.read_bool()? {
@@ -235,7 +229,7 @@ impl JxlExtensions {
 }
 
 #[derive(Debug)]
-struct JxlImageMetadata {
+pub struct JxlImageMetadata {
     orientation: JxlOrientation,
     intrinsic_size: Option<JxlImageSize>,
     preview_size: Option<JxlImageSize>,
@@ -248,7 +242,6 @@ struct JxlImageMetadata {
     tone_mapping: Option<JxlToneMapping>,
     extensions: Option<JxlExtensions>
 }
-
 impl JxlImageMetadata {
     pub fn read(bitstream: &mut BitStream) -> Option<Self> {
         let all_default = bitstream.read_bool()?;
@@ -292,7 +285,7 @@ impl JxlImageMetadata {
             if extensions_.extensions.len() == 0 { None } else { Some(extensions_) }
         };
         let default_m = bitstream.read_bool()?;
-        if default_m {
+        if !default_m {
             if xyb_encoded {
                 todo!("Custom XYB Matrix")
             }
@@ -317,17 +310,6 @@ impl JxlImageMetadata {
     }
 }
 
-#[derive(Debug)]
-struct JxlFrame {
-
-}
-
-impl JxlFrame {
-    pub fn read(bitstream: &mut BitStream) -> Option<Self> {
-        Some(JxlFrame{})
-    }
-}
-
 pub fn decode_jxl(input_file: JxlFile) -> Option<PixelArray<u32>> {
     let mut jxl_data = BitStream::new(&input_file.get_image_data());
     assert_eq!(jxl_data.read_u16(16).unwrap(),0x0aff,"Invalid JXL");
@@ -336,13 +318,14 @@ pub fn decode_jxl(input_file: JxlFile) -> Option<PixelArray<u32>> {
     println!("Image dimensions: {:?}",image_size);
     println!("Image metadata: {:?}",image_metadata);
     let preview_frame = if image_metadata.preview_size != None {
-        Some(JxlFrame::read(&mut jxl_data).unwrap())
+        Some(JxlFrame::read(&mut jxl_data,&image_metadata).unwrap())
     } else { None };
     let mut frames: Vec<JxlFrame> = Vec::new();
     loop {
-        let next_frame = JxlFrame::read(&mut jxl_data).unwrap();
+        let next_frame = JxlFrame::read(&mut jxl_data,&image_metadata).unwrap();
         frames.push(next_frame);
         break;
     }
+    println!("{:?}",frames);
     None
 }

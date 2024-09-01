@@ -2,6 +2,7 @@ mod jxl_file;
 mod bit_reader;
 mod jxl_decoder;
 mod pixel_array;
+mod jxl_frame;
 
 use std::env;
 

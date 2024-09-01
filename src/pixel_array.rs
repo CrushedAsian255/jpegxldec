@@ -1,3 +1,5 @@
+#![allow(dead_code,unused_variables)]
+
 #[derive(Debug)]
 pub struct PixelArray<T> {
     width: u32,
