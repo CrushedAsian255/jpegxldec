@@ -117,10 +117,10 @@ impl From<u8> for JxlOrientation {
 
 #[derive(Debug)]
 pub struct JxlAnimationInfo {
-    tps_numerator: u32,
-    tps_denominator: u32,
-    loop_count: u32,
-    has_timecodes: bool
+    pub tps_numerator: u32,
+    pub tps_denominator: u32,
+    pub loop_count: u32,
+    pub has_timecodes: bool
 }
 impl JxlAnimationInfo {
     pub fn read(bitstream: &mut BitStream) -> Option<Self> {

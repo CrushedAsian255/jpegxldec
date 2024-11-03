@@ -105,6 +105,37 @@ pub struct JxlFrameCropInfo {
     pub y0: i32    
 }
 
+#[derive(Debug,PartialEq)]
+enum JxlBlendingMode {
+    Replace, 
+    Add,
+    Blend,
+    MulAdd,
+    Mul
+}
+impl From<u8> for JxlBlendingMode {
+    fn from(value: u8) -> Self {
+        use JxlBlendingMode as E;
+        match value {
+            0 => E::Replace,
+            1 => E::Add,
+            2 => E::Blend,
+            3 => E::MulAdd,
+            4 => E::Mul,
+            _ => unreachable!()
+        }
+    }
+}
+
+
+#[derive(Debug)]
+pub struct JxlBlendingInfo {
+    blend_mode: JxlBlendingMode,
+    alpha_channel: u8,
+    clamp: bool,
+    source: u8
+}
+
 #[derive(Debug)]
 pub struct JxlFrameHeader {
     frame_type: JxlFrameType,
@@ -119,14 +150,18 @@ pub struct JxlFrameHeader {
     b_qm_scale: u8,
     passes: JxlFramePasses,
     lf_level: Option<u8>,
-    crop_info: Option<JxlFrameCropInfo>
+    crop_info: Option<JxlFrameCropInfo>,
+    blending_info: JxlBlendingInfo,
+    ec_blending_info: Vec<JxlBlendingInfo>,
+    duration: u32,
+    timecode: u32,
+    is_last: bool
 }
 
 #[derive(Debug)]
 pub struct JxlFrame {
     pub header: JxlFrameHeader
 }
-
 impl JxlFrameHeader {
     pub fn read(bitstream: &mut BitStream, image_metadata: &JxlImageMetadata) -> Option<Self> {
         let all_default = bitstream.read_bool()?;
@@ -170,10 +205,43 @@ impl JxlFrameHeader {
                 width,
                 height
             })
+            ;todo!("Cropped images are not supported");
         };
 
         let normal_frame = frame_type == JxlFrameType::RegularFrame || frame_type == JxlFrameType::SkipProgressive;
 
+        let blend_mode = JxlBlendingMode::from(bitstream.read_quad_u32(RawValue(0), RawValue(1), RawValue(2), BitCountWithOffset(2, 3))? as u8);
+
+        let resets_canvas = blend_mode == JxlBlendingMode::Replace;
+
+        let blend_alpha_channel = if image_metadata.extra_channels.len() == 0 || !(blend_mode==JxlBlendingMode::Blend || blend_mode==JxlBlendingMode::MulAdd) {0} else {bitstream.read_quad_u32(RawValue(0), RawValue(1), RawValue(2), BitCountWithOffset(3, 3))?} as u8;
+        let blend_clamp = if image_metadata.extra_channels.len() == 0 || !(blend_mode==JxlBlendingMode::Blend || blend_mode==JxlBlendingMode::MulAdd || blend_mode==JxlBlendingMode::Mul) {false} else {bitstream.read_bool()?};
+        let blend_source = if resets_canvas { 0 } else {bitstream.read_u8(2)?};
+
+        let blending_info = JxlBlendingInfo {
+            blend_mode,
+            alpha_channel: blend_alpha_channel,
+            clamp: blend_clamp,
+            source: blend_source
+        };
+
+        let mut ec_blending_info = Vec::new();
+        for _ in 0..image_metadata.extra_channels.len() {
+            let blend_mode = JxlBlendingMode::from(bitstream.read_quad_u32(RawValue(0), RawValue(1), RawValue(2), BitCountWithOffset(2, 3))? as u8);
+            let alpha_channel = if image_metadata.extra_channels.len() == 0 || !(blend_mode==JxlBlendingMode::Blend || blend_mode==JxlBlendingMode::MulAdd) {0} else {bitstream.read_quad_u32(RawValue(0), RawValue(1), RawValue(2), BitCountWithOffset(3, 3))?} as u8;
+            let clamp = if image_metadata.extra_channels.len() == 0 || !(blend_mode==JxlBlendingMode::Blend || blend_mode==JxlBlendingMode::MulAdd || blend_mode==JxlBlendingMode::Mul) {false} else {bitstream.read_bool()?};
+            let source = if resets_canvas { 0 } else {bitstream.read_u8(2)?};
+            ec_blending_info.push(JxlBlendingInfo {
+                blend_mode,
+                alpha_channel,
+                clamp,
+                source
+            });
+        }
+
+        let duration = if all_default || !normal_frame || image_metadata.animation_info.is_none() { 0 } else {bitstream.read_quad_u32(RawValue(0), RawValue(1), BitCount(8), BitCount(32))?};
+        let timecode = if all_default || !normal_frame || !match &image_metadata.animation_info {None=>false,Some(a)=>a.has_timecodes} {0} else {bitstream.read_u32(32)?};
+        let is_last = if all_default || !normal_frame {frame_type==JxlFrameType::RegularFrame} else { bitstream.read_bool()?};
 
         Some(JxlFrameHeader {
             frame_type,
@@ -188,7 +256,12 @@ impl JxlFrameHeader {
             b_qm_scale,
             passes,
             lf_level,
-            crop_info
+            crop_info,
+            blending_info,
+            ec_blending_info,
+            duration,
+            timecode,
+            is_last
         })
     }
 }
