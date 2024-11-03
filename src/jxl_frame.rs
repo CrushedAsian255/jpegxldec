@@ -1,6 +1,6 @@
 #![allow(dead_code,unused_imports,unused_variables)]
 
-use crate::jxl_decoder::JxlImageMetadata;
+use crate::jxl_image::JxlImageMetadata;
 use crate::bit_reader::QuadDistributions::*;
 use crate::bit_reader::BitStream;
 
@@ -41,12 +41,39 @@ impl From<u8> for JxlFrameEncoding {
 }
 
 #[derive(Debug)]
-pub struct JxlFrame {
-    frame_type: JxlFrameType,
-    frame_encoding: JxlFrameEncoding
+struct JxlFrameFlags {
+    use_noise: bool,
+    use_patches: bool,
+    use_splines: bool,
+    use_lf_frame: bool,
+    use_adaptive_lf_smoothing: bool
+}
+impl From<u64> for JxlFrameFlags {
+    fn from(value: u64) -> Self {
+        Self {
+            use_noise: (value & 0x1) != 0,
+            use_patches: (value & 0x2) != 0,
+            use_splines: (value & 0x10) != 0,
+            use_lf_frame: (value & 0x20) != 0,
+            use_adaptive_lf_smoothing: (value & 0x80) == 0
+        }
+    }
 }
 
-impl JxlFrame {
+#[derive(Debug)]
+pub struct JxlFrameHeader {
+    frame_type: JxlFrameType,
+    frame_encoding: JxlFrameEncoding,
+    flags: JxlFrameFlags,
+    ycbcr: bool
+}
+
+#[derive(Debug)]
+pub struct JxlFrame {
+    pub header: JxlFrameHeader
+}
+
+impl JxlFrameHeader {
     pub fn read(bitstream: &mut BitStream, image_metadata: &JxlImageMetadata) -> Option<Self> {
         let all_default = bitstream.read_bool()?;
         println!("{:?}",all_default);
@@ -58,10 +85,21 @@ impl JxlFrame {
         if frame_encoding != JxlFrameEncoding::Modular {
             todo!("Only Modular frames are supported")
         }
-
-        Some(JxlFrame{
+        let flags = JxlFrameFlags::from(if all_default { 0u64 } else {bitstream.read_var_u64()?});
+        let ycbcr = if all_default || image_metadata.xyb_encoded { false } else { bitstream.read_bool()? };
+        Some(JxlFrameHeader {
             frame_type,
-            frame_encoding
+            frame_encoding,
+            flags,
+            ycbcr
+        })
+    }
+}
+
+impl JxlFrame {
+    pub fn read(bitstream: &mut BitStream, image_metadata: &JxlImageMetadata) -> Option<Self> {
+        Some(Self {
+            header: JxlFrameHeader::read(bitstream, image_metadata)?
         })
     }
 }

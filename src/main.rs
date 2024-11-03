@@ -1,8 +1,11 @@
 mod jxl_file;
 mod bit_reader;
-mod jxl_decoder;
+mod jxl_image;
 mod pixel_array;
 mod jxl_frame;
+mod decode_jxl;
+mod decode_frame;
+mod common;
 
 use std::env;
 
@@ -23,5 +26,5 @@ fn main() {
     };
     #[allow(unused_variables)]
     let jxl_file = jxl_file::JxlFile::read(file).unwrap();
-    let output_pixels = jxl_decoder::decode_jxl(jxl_file);
+    let output_pixels = decode_jxl::decode_jxl(jxl_file);
 }
